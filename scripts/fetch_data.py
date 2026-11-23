@@ -17,7 +17,8 @@ def row(df, *names):
 def fetch(sym):
     t = yf.Ticker(sym.replace(".", "-")); i = t.info
     h = t.history(period="10y", interval="1wk")["Close"].dropna()
-    fin, cf = t.financials, t.cashflow
+    fin = t.financials
+    cf = t.cashflow.reindex(columns=fin.columns)  # gleiche Jahre wie fin
     div_y = {}
     for d, v in t.dividends.items(): div_y[d.year] = div_y.get(d.year, 0) + float(v)
     return {
