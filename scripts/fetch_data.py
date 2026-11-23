@@ -30,6 +30,10 @@ def fetch(sym):
         "years": [c.year for c in fin.columns[::-1]] if len(fin.columns) else [],
         "revenue": row(fin, "Total Revenue"), "grossProfit": row(fin, "Gross Profit"),
         "netIncome": row(fin, "Net Income"), "opCF": row(cf, "Operating Cash Flow"),
+        "roe": i.get("returnOnEquity"), "roa": i.get("returnOnAssets"),
+        "currentRatio": i.get("currentRatio"), "forwardPE": i.get("forwardPE"),
+        "targetMeanPrice": i.get("targetMeanPrice"),
+        "ebit": row(fin, "EBIT", "Operating Income"), "interest": row(fin, "Interest Expense"),
         "dps": div_y,
     }
 
