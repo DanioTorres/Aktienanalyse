@@ -15,14 +15,14 @@ button{cursor:pointer}h1{margin:8px 0 0;font-size:28px}.sub{color:var(--bl);font
 .kpi b{font-size:22px;display:block}.kpi span{color:var(--mu);font-size:12px}
 .sc{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bg)}
 .badge{min-width:34px;text-align:center;padding:6px;border-radius:8px;font-weight:700;color:#fff}
-.A{background:#1b8a5a}.B{background:var(--bl)}.C{background:#e0a100}.D{background:var(--rd)}.n{background:var(--mu)}
+.badge{min-width:40px}.A{background:#0b1f3a;border:1px solid #3a5a8a}.B{background:#0069b4}.C{background:#6ccbe4;color:#0b1f3a}.D{background:transparent;color:#0069b4;border:1.5px solid #0069b4}.n{background:var(--mu)}.cat{cursor:pointer}.cat:after{content:'+';margin-left:auto;font-size:18px}.q{border-radius:50%;width:24px;height:24px;padding:0;margin-left:auto;background:var(--bl);color:#fff;border:0}.inf{background:#0069b4;color:#fff;border-radius:10px;padding:12px;margin:8px 0;font-size:13px}.back{cursor:pointer;color:var(--bl);font-size:12px;margin-bottom:8px}.val{margin-left:auto;color:var(--mu);font-size:12px}
 .big .badge{font-size:20px}canvas{max-height:300px}h2{margin:0 0 8px;font-size:18px}
 .note{color:var(--mu);font-size:12px}
 </style></head><body><main>
 <div class="top"><button id="prev">‹</button><input id="q" list="dl" placeholder="Ticker oder Name (z. B. AAPL)"><datalist id="dl"></datalist><button id="next">›</button><span class="note" id="src"></span></div>
 <div class="sub" id="sym"></div><h1 id="nm"></h1><div class="note" id="sec"></div>
 <div class="two"><div class="card"><h2>Kurs (wöchentlich)</h2><canvas id="c1"></canvas></div>
-<div class="card big"><div class="sc"><span class="badge" id="s0"></span><b>Gesamt-Score</b></div><div id="scs"></div></div></div>
+<div class="card big" id="scard"></div></div>
 <div class="grid" id="kp"></div>
 <div class="card"><h2>Umsätze und Gewinne (Mrd.)</h2><canvas id="c2"></canvas></div>
 <div class="card"><h2>Wachstum &amp; Margen (%)</h2><canvas id="c3"></canvas></div>
@@ -38,21 +38,41 @@ function mk(id,type,labels,sets,opt={}){ch[id]&&ch[id].destroy();
 function demoData(s){let p=100+s.length*7,pr=[],d=new Date();d.setFullYear(d.getFullYear()-10);
  for(let i=0;i<520;i++){p*=1+(Math.random()-.47)*.04;pr.push([d.toISOString().slice(0,10),+p.toFixed(2)]);d.setDate(d.getDate()+7)}
  const y=[2021,2022,2023,2024,2025],r=y.map((_,i)=>20e9*(1+.07*i)),dps={};y.forEach((v,i)=>dps[v]=1+i*.2);
- return{symbol:s,name:s+' (Demo)',sector:'Demo',industry:'Demo',desc:'Demodaten. Nach dem ersten Lauf der GitHub Action erscheinen hier echte Daten.',marketCap:5e10,beta:1.1,divYield:.017,pe:20,ps:2,debtToEquity:60,prices:pr,years:y,revenue:r,grossProfit:r.map(v=>v*.45),netIncome:r.map(v=>v*.08),opCF:r.map(v=>v*.12),dps}}
-function grade(x){return x==null?'n':x>=3?'A':x>=2?'B':x>=1?'C':'D'}
-function scores(d){const R=d.revenue,N=d.netIncome,p=d.prices.map(x=>x[1]);
- const g=R.length>1?(R.at(-1)/R[0])**(1/(R.length-1))-1:null,nm=R.length&&N.length?N.at(-1)/R.at(-1):null;
- const rets=p.slice(1).map((v,i)=>v/p[i]-1),m=rets.reduce((a,b)=>a+b,0)/rets.length,vol=Math.sqrt(rets.reduce((a,b)=>a+(b-m)**2,0)/rets.length)*Math.sqrt(52);
- const sc=[['Stabilität & Wachstum',g==null?null:g>.08?4:g>.04?3:g>0?2:0],
- ['Profitabilität',nm==null?null:nm>.2?4:nm>.1?3:nm>.04?2:nm>0?1:0],
- ['Bilanz & Verschuldung',d.debtToEquity==null?null:d.debtToEquity<50?4:d.debtToEquity<100?3:d.debtToEquity<200?2:1],
- ['Volatilität',vol<.2?4:vol<.3?3:vol<.45?2:1],
- ['Bewertungsniveau',d.pe==null||d.pe<=0?null:d.pe<15?4:d.pe<25?3:d.pe<35?2:1]];
- const v=sc.filter(x=>x[1]!=null).map(x=>x[1]);return{sc,tot:v.length?v.reduce((a,b)=>a+b,0)/v.length:null,vol}}
+ return{symbol:s,name:s+' (Demo)',sector:'Demo',industry:'Demo',desc:'Demodaten. Nach dem ersten Lauf der GitHub Action erscheinen hier echte Daten.',marketCap:5e10,beta:1.1,divYield:.017,pe:20,ps:2,debtToEquity:60,prices:pr,roe:.2,roa:.08,currentRatio:1.4,forwardPE:17,targetMeanPrice:p*1.1,ebit:r.map(v=>v*.15),interest:r.map(v=>v*.01),years:y,revenue:r,grossProfit:r.map(v=>v*.45),netIncome:r.map(v=>v*.08),opCF:r.map(v=>v*.12),dps}}
+const L=['A+','A','A-','B+','B','B-','C+','C','C-','D+','D','D-'];
+const grade=p=>p==null?'–':L[11-p],cls=p=>p==null?'n':L[11-p][0];
+const lin=(v,bad,good)=>v==null||isNaN(v)?null:Math.round(Math.max(0,Math.min(1,(v-bad)/(good-bad)))*11);
+const avg=a=>{a=a.filter(x=>x!=null);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null};
+const pc=(v,d=1)=>v==null||isNaN(v)?'–':fmt(v*100,d,'%'),pp=v=>v==null?'–':fmt(v*100,1,' Pp.');
+let SC=null;
+function scores(d){
+ const R=d.revenue||[],N=d.netIncome||[],G=d.grossProfit||[],O=d.opCF||[],E=d.ebit||[],I=d.interest||[],n=R.length;
+ const p=d.prices.map(x=>x[1]),last=p.at(-1);
+ const rt=(a,i)=>a[i]!=null&&R[i]?a[i]/R[i]:null;
+ const dm=a=>n>1&&rt(a,0)!=null&&rt(a,n-1)!=null?rt(a,n-1)-rt(a,0):null;
+ const cagr=a=>a.length>1&&a[0]>0&&a.at(-1)>0?(a.at(-1)/a[0])**(1/(a.length-1))-1:null;
+ const yoy=n>1&&R[n-2]>0?R[n-1]/R[n-2]-1:null,ncg=N.length>1&&N.at(-1)<=0?-.1:cagr(N);
+ let pk=0,dd=0;p.forEach(v=>{pk=Math.max(pk,v);dd=Math.max(dd,1-v/pk)});
+ const r=p.slice(1).map((v,i)=>Math.log(v/p[i])),sd=w=>{const m=avg(w);return Math.sqrt(w.reduce((a,b)=>a+(b-m)**2,0)/(w.length-1||1))*Math.sqrt(52)};
+ const rv=[];for(let i=52;i<=r.length;i+=4)rv.push(sd(r.slice(i-52,i)));rv.sort((a,b)=>a-b);
+ const vm=rv.length?rv[rv.length>>1]:null,vol=sd(r);
+ const e=E.at(-1),ie=Math.abs(I.at(-1)||0),cov=e>0&&ie>0?e/ie:null;
+ const up=d.targetMeanPrice&&last?d.targetMeanPrice/last-1:null,fw=d.pe>0&&d.forwardPE>0?d.pe/d.forwardPE-1:null;
+ const pe=d.pe==null?null:d.pe<=0?0:lin(d.pe,45,12),ps=lin(d.ps,12,1),oc=O.length&&R.at(-1)?O.at(-1)/R.at(-1):null;
+ const defs=[
+ ['Stabilität und Wachstum',[['Umsatzentwicklung',lin(yoy,-.1,.15),pc(yoy)],['Profitabilitätsentwicklung',lin(dm(N),-.05,.05),pp(dm(N))],['Umsatzwachstum p.a. (verfügbare Jahre)',lin(cagr(R),0,.12),pc(cagr(R))],['Gewinnwachstum p.a. (verfügbare Jahre)',lin(ncg,-.05,.15),pc(ncg)]]],
+ ['Profitabilität',[['Entwicklung der Bruttomargen',lin(dm(G),-.06,.04),pp(dm(G))],['Entwicklung der Nettomargen',lin(dm(N),-.06,.04),pp(dm(N))],['Eigenkapitalrendite',lin(d.roe,0,.25),pc(d.roe)],['Gesamtkapitalrendite',lin(d.roa,0,.12),pc(d.roa)]]],
+ ['Bilanzstärke und Verschuldung',[['Verschuldungsgrad',lin(d.debtToEquity,250,20),fmt(d.debtToEquity,0,'%')],['Zinsdeckungsgrad',e>0&&ie===0?11:lin(cov,1,12),cov?fmt(cov,1,'×'):'kein Zins'],['Umsatzbedingte Liquidität',lin(d.currentRatio,.8,2),fmt(d.currentRatio,2)],['Operativer Cashflow',lin(oc,0,.2),pc(oc)+' v. Umsatz']]],
+ ['Volatilität und Kursperformance',[['Beta-Faktor',lin(d.beta,1.8,.6),fmt(d.beta,2)],['Kursvolatilität (Maximum: größter Rückgang)',lin(dd,.7,.15),pc(dd,0)],['Kursvolatilität (Median, 52 Wochen)',lin(vm,.5,.15),pc(vm,0)]]],
+ ['Bewertungsniveau',[['Mittelfristige Prognosen',avg([lin(up,-.1,.25),lin(fw,-.1,.3)]),up==null?'–':'Kursziel '+pc(up,0)],['Aktuelle Bewertung',avg([pe,ps]),'KGV '+fmt(d.pe,1)+' · KUV '+fmt(d.ps,1)]]]];
+ const cats=defs.map(([n,it])=>{const a=avg(it.map(x=>x[1]));return{n,p:a==null?null:Math.round(a),it:it.map(x=>({n:x[0],p:x[1]==null?null:Math.round(x[1]),v:x[2]}))}});
+ const t=avg(cats.map(c=>c.p));return{cats,tot:t==null?null:Math.round(t),vol}}
+function drawScore(S,k){SC=S;const B=p=>`<span class="badge ${cls(p)}">${grade(p)}</span>`;
+ $('scard').innerHTML=k==null?`<div class="sc" style="border:0">${B(S.tot)}<b style="font-size:18px">Gesamt-Score</b><button class="q" onclick="$('inf').hidden=!$('inf').hidden">?</button></div><div id="inf" class="inf" hidden>Der Gesamtscore fasst fünf Bereiche der Fundamentalanalyse zu einer Note von A+ bis D- zusammen. Die Teilnoten beruhen auf einfachen, selbst festgelegten Schwellenwerten und sind keine Anlageempfehlung.</div>`+S.cats.map((c,i)=>`<div class="sc cat" onclick="drawScore(SC,${i})">${B(c.p)}<b>${c.n}</b></div>`).join(''):
+ (c=>`<div class="back" onclick="drawScore(SC,null)">‹ Zurück zum Gesamtscore</div><div class="sc" style="border:0">${B(c.p)}<b style="font-size:18px">${c.n}</b></div>`+c.it.map(x=>`<div class="sc">${B(x.p)}<span>${x.n}</span><span class="val">${x.v}</span></div>`).join(''))(S.cats[k])}
 function render(d){
  $('sym').textContent=d.symbol;$('nm').textContent=d.name;$('sec').textContent=[d.sector,d.industry].filter(Boolean).join(' · ');$('ds').textContent=d.desc||'–';
- const S=scores(d);$('s0').textContent=S.tot==null?'–':grade(S.tot);$('s0').className='badge '+grade(S.tot);
- $('scs').innerHTML=S.sc.map(([n,v])=>`<div class="sc"><span class="badge ${grade(v)}">${v==null?'–':grade(v)}</span>${n}</div>`).join('');
+ const S=scores(d);drawScore(S,null);
  const p=d.prices,last=p.at(-1)?.[1],ago=n=>p.length>n?(last/p[p.length-1-n][1]-1)*100:null;
  $('kp').innerHTML=[[fmt(d.marketCap/1e9,0,' Mrd.'),'Marktkap.'],[fmt(d.divYield!=null?d.divYield*(d.divYield<1?100:1):null,2,'%'),'Dividendenrendite'],[fmt(d.beta,2),'Beta'],[fmt(d.pe,1,'×'),'KGV'],[fmt(d.ps,1,'×'),'KUV'],[fmt(ago(52),0,'%'),'1 Jahr'],[fmt(ago(260),0,'%'),'5 Jahre'],[fmt(S.vol*100,0,'%'),'Volatilität p.a.']].map(([a,b])=>`<div class="card kpi"><b>${a}</b><span>${b}</span></div>`).join('');
  mk('c1','line',p.map(x=>x[0]),[{data:p.map(x=>x[1]),borderColor:'#0069b4',pointRadius:0,borderWidth:1.5}]);
