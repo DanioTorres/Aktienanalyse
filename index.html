@@ -49,26 +49,28 @@ function scores(d){
  const R=d.revenue||[],N=d.netIncome||[],G=d.grossProfit||[],O=d.opCF||[],E=d.ebit||[],I=d.interest||[],n=R.length;
  const p=d.prices.map(x=>x[1]),last=p.at(-1);
  const rt=(a,i)=>a[i]!=null&&R[i]?a[i]/R[i]:null;
- const dm=a=>n>1&&rt(a,0)!=null&&rt(a,n-1)!=null?rt(a,n-1)-rt(a,0):null;
- const cagr=a=>a.length>1&&a[0]>0&&a.at(-1)>0?(a.at(-1)/a[0])**(1/(a.length-1))-1:null;
- const yoy=n>1&&R[n-2]>0?R[n-1]/R[n-2]-1:null,ncg=N.length>1&&N.at(-1)<=0?-.1:cagr(N);
+ const vs=a=>a.map((v,i)=>[i,v]).filter(x=>x[1]!=null),lv=a=>{const v=vs(a);return v.length?v.at(-1)[1]:null};
+ const lastBoth=(a,b)=>{for(let i=Math.min(a.length,b.length)-1;i>=0;i--)if(a[i]!=null&&b[i])return i;return -1};
+ const dm=a=>{const m=a.map((v,i)=>rt(a,i)).filter(x=>x!=null);return m.length>1?m.at(-1)-m[0]:null};
+ const cagr=a=>{const v=vs(a);if(v.length<2)return null;const[i0,f]=v[0],[i1,l]=v.at(-1);return f>0&&l>0&&i1>i0?(l/f)**(1/(i1-i0))-1:null};
+ const rv_=vs(R),yoy=rv_.length>1&&rv_.at(-2)[1]>0?rv_.at(-1)[1]/rv_.at(-2)[1]-1:null,nv=lv(N),ncg=nv!=null&&nv<=0?-.1:cagr(N);
  let pk=0,dd=0;p.forEach(v=>{pk=Math.max(pk,v);dd=Math.max(dd,1-v/pk)});
  const r=p.slice(1).map((v,i)=>Math.log(v/p[i])),sd=w=>{const m=avg(w);return Math.sqrt(w.reduce((a,b)=>a+(b-m)**2,0)/(w.length-1||1))*Math.sqrt(52)};
  const rv=[];for(let i=52;i<=r.length;i+=4)rv.push(sd(r.slice(i-52,i)));rv.sort((a,b)=>a-b);
  const vm=rv.length?rv[rv.length>>1]:null,vol=sd(r);
- const e=E.at(-1),ie=Math.abs(I.at(-1)||0),cov=e>0&&ie>0?e/ie:null;
+ const e=lv(E),ie=lv(I)==null?null:Math.abs(lv(I));
  const up=d.targetMeanPrice&&last?d.targetMeanPrice/last-1:null,fw=d.pe>0&&d.forwardPE>0?d.pe/d.forwardPE-1:null;
- const pe=d.pe==null?null:d.pe<=0?0:lin(d.pe,45,12),ps=lin(d.ps,12,1),oc=O.length&&R.at(-1)?O.at(-1)/R.at(-1):null;
+ const pe=d.pe==null?null:d.pe<=0?0:lin(d.pe,45,12),ps=lin(d.ps,12,1),oc=(()=>{const i=lastBoth(O,R);return i<0?null:O[i]/R[i]})();
  const defs=[
  ['Stabilität und Wachstum',[['Umsatzentwicklung',lin(yoy,-.1,.15),pc(yoy)],['Profitabilitätsentwicklung',lin(dm(N),-.05,.05),pp(dm(N))],['Umsatzwachstum p.a. (verfügbare Jahre)',lin(cagr(R),0,.12),pc(cagr(R))],['Gewinnwachstum p.a. (verfügbare Jahre)',lin(ncg,-.05,.15),pc(ncg)]]],
  ['Profitabilität',[['Entwicklung der Bruttomargen',lin(dm(G),-.06,.04),pp(dm(G))],['Entwicklung der Nettomargen',lin(dm(N),-.06,.04),pp(dm(N))],['Eigenkapitalrendite',lin(d.roe,0,.25),pc(d.roe)],['Gesamtkapitalrendite',lin(d.roa,0,.12),pc(d.roa)]]],
- ['Bilanzstärke und Verschuldung',[['Verschuldungsgrad',lin(d.debtToEquity,250,20),fmt(d.debtToEquity,0,'%')],['Zinsdeckungsgrad',e>0&&ie===0?11:lin(cov,1,12),cov?fmt(cov,1,'×'):'kein Zins'],['Umsatzbedingte Liquidität',lin(d.currentRatio,.8,2),fmt(d.currentRatio,2)],['Operativer Cashflow',lin(oc,0,.2),pc(oc)+' v. Umsatz']]],
+ ['Bilanzstärke und Verschuldung',[['Verschuldungsgrad',lin(d.debtToEquity,250,20),fmt(d.debtToEquity,0,'%')],['Zinsdeckungsgrad',ie==null||e==null?null:e<=0?0:ie===0?11:lin(e/ie,1,12),ie==null||e==null?'–':ie===0?'kein Zins':fmt(e/ie,1,'×')],['Umsatzbedingte Liquidität',lin(d.currentRatio,.8,2),fmt(d.currentRatio,2)],['Operativer Cashflow',lin(oc,0,.2),pc(oc)+' v. Umsatz']]],
  ['Volatilität und Kursperformance',[['Beta-Faktor',lin(d.beta,1.8,.6),fmt(d.beta,2)],['Kursvolatilität (Maximum: größter Rückgang)',lin(dd,.7,.15),pc(dd,0)],['Kursvolatilität (Median, 52 Wochen)',lin(vm,.5,.15),pc(vm,0)]]],
  ['Bewertungsniveau',[['Mittelfristige Prognosen',avg([lin(up,-.1,.25),lin(fw,-.1,.3)]),up==null?'–':'Kursziel '+pc(up,0)],['Aktuelle Bewertung',avg([pe,ps]),'KGV '+fmt(d.pe,1)+' · KUV '+fmt(d.ps,1)]]]];
  const cats=defs.map(([n,it])=>{const a=avg(it.map(x=>x[1]));return{n,p:a==null?null:Math.round(a),it:it.map(x=>({n:x[0],p:x[1]==null?null:Math.round(x[1]),v:x[2]}))}});
  const t=avg(cats.map(c=>c.p));return{cats,tot:t==null?null:Math.round(t),vol}}
-function drawScore(S,k){SC=S;const B=p=>`<span class="badge ${cls(p)}">${grade(p)}</span>`;
- $('scard').innerHTML=k==null?`<div class="sc" style="border:0">${B(S.tot)}<b style="font-size:18px">Gesamt-Score</b><button class="q" onclick="$('inf').hidden=!$('inf').hidden">?</button></div><div id="inf" class="inf" hidden>Der Gesamtscore fasst fünf Bereiche der Fundamentalanalyse zu einer Note von A+ bis D- zusammen. Die Teilnoten beruhen auf einfachen, selbst festgelegten Schwellenwerten und sind keine Anlageempfehlung.</div>`+S.cats.map((c,i)=>`<div class="sc cat" onclick="drawScore(SC,${i})">${B(c.p)}<b>${c.n}</b></div>`).join(''):
+function drawScore(S,k){SC=S;const B=p=>`<span class="badge ${cls(p)}">${p==null?'–':L[11-p][0]}</span>`,T=p=>`<span class="badge ${cls(p)}">${grade(p)}</span>`;
+ $('scard').innerHTML=k==null?`<div class="sc" style="border:0">${T(S.tot)}<b style="font-size:18px">Gesamt-Score</b><button class="q" onclick="$('inf').hidden=!$('inf').hidden">?</button></div><div id="inf" class="inf" hidden>Der Gesamtscore fasst fünf Bereiche der Fundamentalanalyse zu einer Note von A+ bis D- zusammen. Die Teilnoten beruhen auf einfachen, selbst festgelegten Schwellenwerten und sind keine Anlageempfehlung.</div>`+S.cats.map((c,i)=>`<div class="sc cat" onclick="drawScore(SC,${i})">${B(c.p)}<b>${c.n}</b></div>`).join(''):
  (c=>`<div class="back" onclick="drawScore(SC,null)">‹ Zurück zum Gesamtscore</div><div class="sc" style="border:0">${B(c.p)}<b style="font-size:18px">${c.n}</b></div>`+c.it.map(x=>`<div class="sc">${B(x.p)}<span>${x.n}</span><span class="val">${x.v}</span></div>`).join(''))(S.cats[k])}
 function render(d){
  $('sym').textContent=d.symbol;$('nm').textContent=d.name;$('sec').textContent=[d.sector,d.industry].filter(Boolean).join(' · ');$('ds').textContent=d.desc||'–';
