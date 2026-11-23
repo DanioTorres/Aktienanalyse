@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S&P 500 Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f4f4f4;--card:#fff;--tx:#0b1f3a;--mu:#6b7280;--navy:#0b1f3a;--bl:#0069b4;--lb:#6ccbe4;--gr:#7fb069;--rd:#d1495b}
+@media(prefers-color-scheme:dark){:root{--bg:#10151d;--card:#1a2230;--tx:#e8edf5;--mu:#93a0b4;--navy:#9fb7d9}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:1000px;margin:auto;padding:16px}
+.top{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+input,button{font:inherit;padding:8px 12px;border:1px solid var(--mu);border-radius:8px;background:var(--card);color:var(--tx)}
+button{cursor:pointer}h1{margin:8px 0 0;font-size:28px}.sub{color:var(--bl);font-weight:700}
+.card{background:var(--card);border-radius:14px;padding:16px;margin:12px 0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.two{display:grid;gap:12px;grid-template-columns:2fr 1fr}@media(max-width:700px){.two{grid-template-columns:1fr}}
+.kpi b{font-size:22px;display:block}.kpi span{color:var(--mu);font-size:12px}
+.sc{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bg)}
+.badge{min-width:34px;text-align:center;padding:6px;border-radius:8px;font-weight:700;color:#fff}
+.A{background:#1b8a5a}.B{background:var(--bl)}.C{background:#e0a100}.D{background:var(--rd)}.n{background:var(--mu)}
+.big .badge{font-size:20px}canvas{max-height:300px}h2{margin:0 0 8px;font-size:18px}
+.note{color:var(--mu);font-size:12px}
+</style></head><body><main>
+<div class="top"><button id="prev">‹</button><input id="q" list="dl" placeholder="Ticker oder Name (z. B. AAPL)"><datalist id="dl"></datalist><button id="next">›</button><span class="note" id="src"></span></div>
+<div class="sub" id="sym"></div><h1 id="nm"></h1><div class="note" id="sec"></div>
+<div class="two"><div class="card"><h2>Kurs (wöchentlich)</h2><canvas id="c1"></canvas></div>
+<div class="card big"><div class="sc"><span class="badge" id="s0"></span><b>Gesamt-Score</b></div><div id="scs"></div></div></div>
+<div class="grid" id="kp"></div>
+<div class="card"><h2>Umsätze und Gewinne (Mrd.)</h2><canvas id="c2"></canvas></div>
+<div class="card"><h2>Wachstum &amp; Margen (%)</h2><canvas id="c3"></canvas></div>
+<div class="card"><h2>Saisonalität: Ø Monatsperformance (%)</h2><canvas id="c4"></canvas></div>
+<div class="card"><h2>Dividende je Aktie (€/$)</h2><canvas id="c5"></canvas></div>
+<div class="card"><h2>Unternehmensbeschreibung</h2><p id="ds"></p></div>
+<p class="note">Datenquelle: Yahoo Finance via yfinance. Scores sind eigene vereinfachte Regeln, keine Anlageberatung.</p>
+</main><script>
+const $=id=>document.getElementById(id),ch={};let IDX=[],cur=0,demo=false;
+const fmt=(v,d=1,s='')=>v==null||isNaN(v)?'–':v.toLocaleString('de-DE',{maximumFractionDigits:d})+s;
+function mk(id,type,labels,sets,opt={}){ch[id]&&ch[id].destroy();
+ ch[id]=new Chart($(id),{type,data:{labels,datasets:sets},options:{animation:false,plugins:{legend:{display:sets.length>1}},scales:{x:{ticks:{maxTicksLimit:10}}},...opt}})}
+function demoData(s){let p=100+s.length*7,pr=[],d=new Date();d.setFullYear(d.getFullYear()-10);
+ for(let i=0;i<520;i++){p*=1+(Math.random()-.47)*.04;pr.push([d.toISOString().slice(0,10),+p.toFixed(2)]);d.setDate(d.getDate()+7)}
+ const y=[2021,2022,2023,2024,2025],r=y.map((_,i)=>20e9*(1+.07*i)),dps={};y.forEach((v,i)=>dps[v]=1+i*.2);
+ return{symbol:s,name:s+' (Demo)',sector:'Demo',industry:'Demo',desc:'Demodaten. Nach dem ersten Lauf der GitHub Action erscheinen hier echte Daten.',marketCap:5e10,beta:1.1,divYield:.017,pe:20,ps:2,debtToEquity:60,prices:pr,years:y,revenue:r,grossProfit:r.map(v=>v*.45),netIncome:r.map(v=>v*.08),opCF:r.map(v=>v*.12),dps}}
+function grade(x){return x==null?'n':x>=3?'A':x>=2?'B':x>=1?'C':'D'}
+function scores(d){const R=d.revenue,N=d.netIncome,p=d.prices.map(x=>x[1]);
+ const g=R.length>1?(R.at(-1)/R[0])**(1/(R.length-1))-1:null,nm=R.length&&N.length?N.at(-1)/R.at(-1):null;
+ const rets=p.slice(1).map((v,i)=>v/p[i]-1),m=rets.reduce((a,b)=>a+b,0)/rets.length,vol=Math.sqrt(rets.reduce((a,b)=>a+(b-m)**2,0)/rets.length)*Math.sqrt(52);
+ const sc=[['Stabilität & Wachstum',g==null?null:g>.08?4:g>.04?3:g>0?2:0],
+ ['Profitabilität',nm==null?null:nm>.2?4:nm>.1?3:nm>.04?2:nm>0?1:0],
+ ['Bilanz & Verschuldung',d.debtToEquity==null?null:d.debtToEquity<50?4:d.debtToEquity<100?3:d.debtToEquity<200?2:1],
+ ['Volatilität',vol<.2?4:vol<.3?3:vol<.45?2:1],
+ ['Bewertungsniveau',d.pe==null||d.pe<=0?null:d.pe<15?4:d.pe<25?3:d.pe<35?2:1]];
+ const v=sc.filter(x=>x[1]!=null).map(x=>x[1]);return{sc,tot:v.length?v.reduce((a,b)=>a+b,0)/v.length:null,vol}}
+function render(d){
+ $('sym').textContent=d.symbol;$('nm').textContent=d.name;$('sec').textContent=[d.sector,d.industry].filter(Boolean).join(' · ');$('ds').textContent=d.desc||'–';
+ const S=scores(d);$('s0').textContent=S.tot==null?'–':grade(S.tot);$('s0').className='badge '+grade(S.tot);
+ $('scs').innerHTML=S.sc.map(([n,v])=>`<div class="sc"><span class="badge ${grade(v)}">${v==null?'–':grade(v)}</span>${n}</div>`).join('');
+ const p=d.prices,last=p.at(-1)?.[1],ago=n=>p.length>n?(last/p[p.length-1-n][1]-1)*100:null;
+ $('kp').innerHTML=[[fmt(d.marketCap/1e9,0,' Mrd.'),'Marktkap.'],[fmt(d.divYield!=null?d.divYield*(d.divYield<1?100:1):null,2,'%'),'Dividendenrendite'],[fmt(d.beta,2),'Beta'],[fmt(d.pe,1,'×'),'KGV'],[fmt(d.ps,1,'×'),'KUV'],[fmt(ago(52),0,'%'),'1 Jahr'],[fmt(ago(260),0,'%'),'5 Jahre'],[fmt(S.vol*100,0,'%'),'Volatilität p.a.']].map(([a,b])=>`<div class="card kpi"><b>${a}</b><span>${b}</span></div>`).join('');
+ mk('c1','line',p.map(x=>x[0]),[{data:p.map(x=>x[1]),borderColor:'#0069b4',pointRadius:0,borderWidth:1.5}]);
+ const B=a=>a.map(v=>v==null?null:v/1e9);
+ mk('c2','bar',d.years,[{label:'Umsatz',data:B(d.revenue),backgroundColor:'#0b1f3a'},{label:'Bruttogewinn',data:B(d.grossProfit),backgroundColor:'#0069b4'},{label:'Op. Cashflow',data:B(d.opCF),backgroundColor:'#6ccbe4'},{label:'Nettogewinn',data:B(d.netIncome),backgroundColor:'#c9c9c9'}]);
+ const gr=d.revenue.map((v,i)=>i?(v/d.revenue[i-1]-1)*100:null),mg=(a)=>a.map((v,i)=>v!=null&&d.revenue[i]?v/d.revenue[i]*100:null);
+ mk('c3','line',d.years,[{label:'Umsatzwachstum',data:gr,borderColor:'#0b1f3a'},{label:'Brutto-Marge',data:mg(d.grossProfit),borderColor:'#0069b4'},{label:'Cashflow-Marge',data:mg(d.opCF),borderColor:'#6ccbe4'},{label:'Netto-Marge',data:mg(d.netIncome),borderColor:'#999'}]);
+ const mo=Array.from({length:12},()=>[]);for(let i=1;i<p.length;i++){const m=+p[i][0].slice(5,7)-1;mo[m].push(p[i][1]/p[i-1][1]-1)}
+ const mn=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],mv=mo.map(a=>a.length?a.reduce((x,y)=>x+y,0)/a.length*4.345*100:0);
+ mk('c4','bar',mn,[{data:mv,backgroundColor:mv.map(v=>v>=0?'#7fb069':'#d1495b')}]);
+ const dy=Object.keys(d.dps||{}).filter(y=>y>=2016);
+ mk('c5','bar',dy,[{data:dy.map(y=>d.dps[y]),backgroundColor:'#0b1f3a'}]);
+}
+async function load(i){cur=(i+IDX.length)%IDX.length;const s=IDX[cur].s;$('q').value='';
+ let d;try{d=await (await fetch(`data/${s.replace('/','-')}.json`)).json();demo=false}catch(e){d=demoData(s);demo=true}
+ $('src').textContent=demo?'Demo-Daten':'';render(d);history.replaceState(null,'','#'+s)}
+(async()=>{try{IDX=await (await fetch('data/index.json')).json()}catch(e){IDX=['AAPL','MSFT','ADS','NVDA','KO'].map(s=>({s,n:s,sec:''}))}
+ $('dl').innerHTML=IDX.map(x=>`<option value="${x.s}">${x.n}</option>`).join('');
+ $('q').onchange=()=>{const v=$('q').value.trim().toLowerCase(),i=IDX.findIndex(x=>x.s.toLowerCase()==v||x.n.toLowerCase().includes(v));if(i>=0)load(i)};
+ $('prev').onclick=()=>load(cur-1);$('next').onclick=()=>load(cur+1);
+ const h=location.hash.slice(1),i=IDX.findIndex(x=>x.s==h);load(i>=0?i:0)})();
+</script></body></html>
